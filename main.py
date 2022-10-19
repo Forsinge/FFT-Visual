@@ -14,15 +14,19 @@ class Point:
 class Transform:
     def __init__(self, f, len):
         self.len = len
-        self.frequencies = np.concatenate([np.arange(0, np.floor(len/2)), np.arange(np.floor(-len/2), 0)])
+        self.frequencies = np.concatenate([np.arange(0, np.ceil(len/2)), np.arange(np.ceil(-len/2), 0)])
         transform_raw = fft(f)
         self.phases = np.arctan2(transform_raw.imag, transform_raw.real) * 180/np.pi
         self.coefficients = np.absolute(transform_raw/len)
         self.final = Point(0, 0)
     
-    def get_point(self, i):
+    def get_point_x(self, i):
         arg = time.time() * self.frequencies[i] + self.phases[i]
-        return Point(np.cos(arg), np.sin(arg))
+        return Point(self.coefficients[i] * np.cos(arg), self.coefficients[i] * np.sin(arg))
+
+    def get_point_y(self, i):
+        arg = time.time() * self.frequencies[i] + self.phases[i]
+        return Point(self.coefficients[i] * np.sin(arg), self.coefficients[i] * np.cos(arg))
     
     def draw(self):
         fr = self.get_point(0)
@@ -52,7 +56,19 @@ class PenTrace:
 
 
 def draw_line(p1, p2, color):
-    canvas.create_line((p1.x, p1.y), (p2.x, p2.y), width=1, fill=color)
+    canvas.create_line((p1.x, p1.y), (p2.x, p2.y), width=2, fill=color)
+
+def draw_components(tx, ty):
+    fr = add(tx.get_point_x(0), ty.get_point_y(0))
+    for i in range(1, tx.len):
+        to = add(fr, tx.get_point_x(i))
+        draw_line(fr, to, 'white')
+        fr = to
+        to = add(fr, ty.get_point_y(i))
+        draw_line(fr, to, 'white')
+        fr = to
+    tx.final = fr
+    
 
 def add(p1, p2):
     return Point(p1.x + p2.x, p1.y + p2.y)
@@ -63,12 +79,15 @@ def quit_cb():
     root.after(100, root.destroy())
     
 def main():
-    fx = [300, 500, 300, 500, 300, 500, 300, 500, 300, 500, 300, 500, 300]
-    #fy = [100, 300, 500, 700, 500, 300, 100, 100, 100, 100, 100, 100]
+    fx = [200, 220, 240, 260, 280, 300, 320, 340, 360, 380, 400, 420, 440, 460, 480,
+    460, 440, 420, 400, 380, 360, 340, 320, 300, 280, 260, 240, 220, 200]
+    fy = [200, 240, 280, 320, 360, 400, 440, 480, 440, 400, 360, 320, 280, 240, 200,
+    240, 280, 320, 360, 400, 440, 480, 440, 400, 360, 320, 280, 240, 200]
 
-    transform = Transform(fx, len(fx))
-    print(transform.frequencies)
-    pen = PenTrace(20)
+    transform_x = Transform(fx, len(fx))
+    transform_y = Transform(fy, len(fy))
+    print(transform_y.coefficients)
+    pen = PenTrace(200)
 
     global root 
     root = tk.Tk()
@@ -88,8 +107,8 @@ def main():
     canvas.pack(anchor=tk.CENTER, expand=True)
 
     while(True and active):
-        transform.draw()
-        pen.append(transform.final)
+        draw_components(transform_x, transform_y)
+        pen.append(transform_x.final)
         pen.draw()
         time.sleep(increment)
         try:
