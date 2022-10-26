@@ -1,7 +1,7 @@
 import time
 import tkinter as tk
 import numpy as np
-from scipy.fft import fft
+from scipy.fft import fft, fftfreq, fftshift
 
 class Point:
     def __init__(self, x, y):
@@ -11,111 +11,186 @@ class Point:
     def __repr__(self):
         return "(" + str(self.x) + "," + str(self.y) + ")"
 
+    def abs(self):
+        return np.sqrt(self.x * self.x + self.y * self.y)
+
 class Transform:
-    def __init__(self, f, len):
-        self.len = len
-        self.frequencies = np.concatenate([np.arange(0, np.ceil(len/2)), np.arange(np.ceil(-len/2), 0)])
+    def __init__(self, f, len, offset):
         transform_raw = fft(f)
-        self.phases = np.arctan2(transform_raw.imag, transform_raw.real) * 180/np.pi
-        self.coefficients = np.absolute(transform_raw/len)
-        self.final = Point(0, 0)
+        self.len = len
+        self.frequencies = fftfreq(len)
+        self.phases = np.angle(transform_raw)
+        self.coefficients = np.absolute(transform_raw)/len
+        self.points = [Point(0,0) for _ in range(len)]
+        self.offset = offset
+
+    def update(self):
+        for i in range(0, self.len):
+            self.points[i] = self.getPoint(i)
     
-    def get_point_x(self, i):
-        arg = time.time() * self.frequencies[i] + self.phases[i]
+    def getPoint(self, i):
+        arg = (time.time()*150) * self.frequencies[i] + self.phases[i] + self.offset
         return Point(self.coefficients[i] * np.cos(arg), self.coefficients[i] * np.sin(arg))
 
-    def get_point_y(self, i):
-        arg = time.time() * self.frequencies[i] + self.phases[i]
-        return Point(self.coefficients[i] * np.sin(arg), self.coefficients[i] * np.cos(arg))
-    
-    def draw(self):
-        fr = self.get_point(0)
-        for i in range(1, self.len):
-            to = add(self.get_point(i), fr)
-            draw_line(fr, to, 'white')
-            fr = to
-        self.final = fr
+class UserPath:
+    def __init__(self):
+        self.counter = 0
+        self.points = []
 
-class PenTrace:
+    def append(self, p):
+        self.points.append(p)
+        if (self.counter != 0):
+            drawLine(self.points[self.counter-1], self.points[self.counter], 'red', 2, userCanvas)
+        self.counter += 1
+        
+    def reset(self):
+        if (self.counter != 0):
+            userCanvas.delete("all")
+        self.points.clear()
+        self.counter = 0
+
+class FFTPath:
     def __init__(self, len):
         self.len = len
         self.counter = 0
         self.points = [Point(0, 0) for _ in range(len)]
-        
     
     def append(self, p):
         self.points[self.counter] = p
         self.counter = (self.counter+1) % self.len
-
+    
     def draw(self):
         for i in range(0, self.len-1):
             if (i+1 != self.counter):
-                draw_line(self.points[i], self.points[i+1], 'red')
-        if (self.counter != 0):
-            draw_line(self.points[self.len-1], self.points[0], 'red')
+                fr = self.points[i]
+                to = self.points[i+1]
+                if (fr.abs() != 0 and to.abs() != 0):
+                    drawLine(fr, to, 'green', 3, fftCanvas)
+        if (self.counter != 0 and self.points[self.len-1].abs() != 0):
+            drawLine(self.points[self.len-1], self.points[0], 'green', 3, fftCanvas)
 
 
-def draw_line(p1, p2, color):
-    canvas.create_line((p1.x, p1.y), (p2.x, p2.y), width=2, fill=color)
+def drawLine(p1, p2, color, width, canvas):
+    canvas.create_line((p1.x, p1.y), (p2.x, p2.y), fill=color, width=width)
 
-def draw_components(tx, ty):
-    fr = add(tx.get_point_x(0), ty.get_point_y(0))
-    for i in range(1, tx.len):
-        to = add(fr, tx.get_point_x(i))
-        draw_line(fr, to, 'white')
-        fr = to
-        to = add(fr, ty.get_point_y(i))
-        draw_line(fr, to, 'white')
-        fr = to
-    tx.final = fr
-    
-
-def add(p1, p2):
+def addPoints(p1, p2):
     return Point(p1.x + p2.x, p1.y + p2.y)
 
-def quit_cb():
-    global active
-    active = False
+def quitCallback():
+    global appActive
+    appActive = False
     root.after(100, root.destroy())
+
+def mousePress(event):
+    global dragActive
+    dragActive = True
+    p = Point(event.x, event.y)
+    userPath.reset()
+    userPath.append(p)
+
+def mouseDrag(event):
+    if (dragActive):
+        p = Point(event.x, event.y)
+        userPath.append(p)
+
+def mouseRelease(event):
+    global dragActive
+    global tx, ty
+    global fftPath
+
+    pathLen = len(userPath.points)
+    if (pathLen % 2 == 0):
+        userPath.points.append(userPath.points[pathLen-1])
+
+    fftPath = FFTPath(len(userPath.points))
+    dragActive = False
+    fftCanvas.delete("all")
+    (a, b) = getTransforms(userPath.points)
+    tx = a
+    ty = b
     
+
+def getTransforms(path):
+    fx = []
+    fy = []
+    for i in range(len(path)):
+        fx.append(path[i].x)
+        fy.append(path[i].y)
+    return (Transform(fx, len(fx), 0), Transform(fy, len(fy), np.pi/2))
+
+def drawArms():
+    tx.update()
+    ty.update()
+    fr = addPoints(tx.points[0], ty.points[0]) # start from center of drawing
+
+    pos = 1
+    neg = tx.len-1
+
+    while (neg >= pos):
+        to = addPoints(fr, tx.points[pos])
+        drawLine(fr, to, 'white', 1, fftCanvas)
+        fr = to
+
+        to = addPoints(fr, ty.points[pos])
+        drawLine(fr, to, 'white', 1, fftCanvas)
+        fr = to
+
+        if (pos != neg):
+            to = addPoints(fr, tx.points[neg])
+            drawLine(fr, to, 'white', 1, fftCanvas)
+            fr = to
+
+            to = addPoints(fr, ty.points[neg])
+            drawLine(fr, to, 'white', 1, fftCanvas)
+            fr = to
+
+        pos += 1
+        neg -= 1
+
+    return fr
+
 def main():
-    fx = [200, 220, 240, 260, 280, 300, 320, 340, 360, 380, 400, 420, 440, 460, 480,
-    460, 440, 420, 400, 380, 360, 340, 320, 300, 280, 260, 240, 220, 200]
-    fy = [200, 240, 280, 320, 360, 400, 440, 480, 440, 400, 360, 320, 280, 240, 200,
-    240, 280, 320, 360, 400, 440, 480, 440, 400, 360, 320, 280, 240, 200]
+    global root, userCanvas, fftCanvas
+    global appActive, dragActive
+    global userPath, fftPath
+    global tx, ty
 
-    transform_x = Transform(fx, len(fx))
-    transform_y = Transform(fy, len(fy))
-    print(transform_y.coefficients)
-    pen = PenTrace(200)
-
-    global root 
-    root = tk.Tk()
-
-    global canvas
-    canvas = tk.Canvas(root, width=800, height=800, bg='black')
-
-    global increment
-    increment = 0.02
-
-    global active
-    active = True
+    appActive = True
+    dragActive = False
     
-    root.protocol("WM_DELETE_WINDOW", quit_cb)
-    root.geometry('800x800')
+    root = tk.Tk()
+    root.columnconfigure(0, weight=1)
+    root.columnconfigure(1, weight=1)
+    root.protocol("WM_DELETE_WINDOW", quitCallback)
+    root.geometry('1600x800')
     root.title("DFT Visual")
-    canvas.pack(anchor=tk.CENTER, expand=True)
 
-    while(True and active):
-        draw_components(transform_x, transform_y)
-        pen.append(transform_x.final)
-        pen.draw()
-        time.sleep(increment)
+    userCanvas = tk.Canvas(root, width=800, height=800, bg='black')
+    userCanvas.grid(row=0, column=0)
+    userCanvas.bind('<ButtonPress>', mousePress)
+    userCanvas.bind('<Motion>', mouseDrag)
+    userCanvas.bind('<ButtonRelease>', mouseRelease)
+
+    fftCanvas = tk.Canvas(root, width=800, height=800, bg='black')
+    fftCanvas.grid(row=0, column=1)
+
+    userPath = UserPath()
+    fftPath = FFTPath(1)
+
+    tx = Transform([0], 1, 0)
+    ty = Transform([0], 1, 0)
+    
+    while(True and appActive):
+        if (tx.len > 1):
+            total = drawArms()
+            fftPath.append(total)
+            fftPath.draw()
+        
+        time.sleep(0.01)
         try:
             root.update()
-            canvas.delete("all")
+            fftCanvas.delete("all")
         except:
             exit(1)
-        
-            
+    
 main()
