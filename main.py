@@ -1,7 +1,7 @@
 import time
 import tkinter as tk
 import numpy as np
-from scipy.fft import fft, fftfreq, fftshift
+from scipy.fft import fft, fftfreq
 
 class Point:
     def __init__(self, x, y):
