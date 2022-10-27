@@ -123,7 +123,7 @@ def mouseRelease(event):
     global timer
 
     timer = Timer(len(userPath.points))
-    fftPath = FFTPath(len(userPath.points))
+    fftPath = FFTPath()
     dragActive = False
     fftCanvas.delete("all")
     (a, b) = getTransforms(userPath.points)
@@ -191,7 +191,7 @@ def main():
     fftCanvas.grid(row=0, column=1)
 
     userPath = UserPath()
-    fftPath = FFTPath(1)
+    fftPath = FFTPath()
 
     tx = Transform([0], 1, 0)
     ty = Transform([0], 1, 0)
@@ -204,7 +204,7 @@ def main():
             total = drawArms()
             fftPath.append(total)
             fftPath.draw()
-            sleep(0.01)
+            sleep(0.02)
         else:
             sleep(0.001)
 
