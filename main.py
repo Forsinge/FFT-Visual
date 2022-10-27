@@ -1,6 +1,6 @@
-import time
 import tkinter as tk
-import numpy as np
+from time import sleep
+from numpy import sqrt, pi, sin, cos, absolute, angle
 from scipy.fft import fft, fftfreq
 
 class Point:
@@ -12,7 +12,7 @@ class Point:
         return "(" + str(self.x) + "," + str(self.y) + ")"
 
     def abs(self):
-        return np.sqrt(self.x * self.x + self.y * self.y)
+        return sqrt(self.x * self.x + self.y * self.y)
 
     def add(self, other):
         return Point(self.x + other.x, self.y + other.y)
@@ -20,15 +20,15 @@ class Point:
     def dist(self, other):
         dx = self.x - other.x
         dy = self.y - other.y
-        return np.sqrt(dx * dx + dy * dy)
+        return sqrt(dx * dx + dy * dy)
 
 class Transform:
     def __init__(self, f, len, offset):
         transform_raw = fft(f)
         self.len = len
         self.frequencies = fftfreq(len)
-        self.phases = np.angle(transform_raw)
-        self.coefficients = np.absolute(transform_raw)/len
+        self.phases = angle(transform_raw)
+        self.coefficients = absolute(transform_raw)/len
         self.points = [Point(0,0) for _ in range(len)]
         self.offset = offset
 
@@ -38,7 +38,7 @@ class Transform:
     
     def getPoint(self, i, timer):
         arg = timer.time() * self.frequencies[i] + self.phases[i] + self.offset
-        return Point(self.coefficients[i] * np.cos(arg), self.coefficients[i] * np.sin(arg))
+        return Point(self.coefficients[i] * cos(arg), self.coefficients[i] * sin(arg))
 
 class UserPath:
     def __init__(self):
@@ -58,7 +58,7 @@ class UserPath:
         self.counter = 0
 
 class FFTPath:
-    def __init__(self, len):
+    def __init__(self):
         self.maxlen = 190
         self.counter = 0
         self.points = []
@@ -90,7 +90,7 @@ class Timer:
         self.counter = 0
     
     def incr(self):
-        self.counter = self.counter + 0.01 * self.len * np.pi
+        self.counter = self.counter + 0.01 * self.len * pi
 
     def time(self):
         return self.counter
@@ -137,7 +137,7 @@ def getTransforms(path):
     for i in range(len(path)):
         fx.append(path[i].x)
         fy.append(path[i].y)
-    return (Transform(fx, len(fx), 0), Transform(fy, len(fy), np.pi/2))
+    return (Transform(fx, len(fx), 0), Transform(fy, len(fy), pi/2))
 
 def drawArms():
     tx.update(timer)
@@ -147,6 +147,8 @@ def drawArms():
     pos = 1
     neg = tx.len-1
 
+    # only use the first 50 frequencies,
+    # should be adequate for most drawings
     while (neg >= pos and pos < 50):
         to = fr.add(tx.points[pos]).add(ty.points[pos])
         drawLine(fr, to, 'white', 1, fftCanvas)
@@ -202,10 +204,9 @@ def main():
             total = drawArms()
             fftPath.append(total)
             fftPath.draw()
-            time.sleep(0.01)
-
+            sleep(0.01)
         else:
-            time.sleep(0.001)
+            sleep(0.001)
 
         try:
             root.update()
