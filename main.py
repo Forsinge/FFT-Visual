@@ -14,6 +14,14 @@ class Point:
     def abs(self):
         return np.sqrt(self.x * self.x + self.y * self.y)
 
+    def add(self, other):
+        return Point(self.x + other.x, self.y + other.y)
+
+    def dist(self, other):
+        dx = self.x - other.x
+        dy = self.y - other.y
+        return np.sqrt(dx * dx + dy * dy)
+
 class Transform:
     def __init__(self, f, len, offset):
         transform_raw = fft(f)
@@ -24,12 +32,12 @@ class Transform:
         self.points = [Point(0,0) for _ in range(len)]
         self.offset = offset
 
-    def update(self):
+    def update(self, timer):
         for i in range(0, self.len):
-            self.points[i] = self.getPoint(i)
+            self.points[i] = self.getPoint(i, timer)
     
-    def getPoint(self, i):
-        arg = (time.time()*150) * self.frequencies[i] + self.phases[i] + self.offset
+    def getPoint(self, i, timer):
+        arg = timer.time() * self.frequencies[i] + self.phases[i] + self.offset
         return Point(self.coefficients[i] * np.cos(arg), self.coefficients[i] * np.sin(arg))
 
 class UserPath:
@@ -51,30 +59,45 @@ class UserPath:
 
 class FFTPath:
     def __init__(self, len):
-        self.len = len
+        self.maxlen = 190
         self.counter = 0
-        self.points = [Point(0, 0) for _ in range(len)]
+        self.points = []
+
     
     def append(self, p):
-        self.points[self.counter] = p
-        self.counter = (self.counter+1) % self.len
+        if (self.counter >= self.maxlen):
+            self.points[self.counter % self.maxlen] = p
+        else:
+            self.points.append(p)
+        self.counter += 1
     
     def draw(self):
-        for i in range(0, self.len-1):
-            if (i+1 != self.counter):
+        for i in range(0, len(self.points)-1):
+            cutoff = self.counter % self.maxlen
+            if (i+1 != cutoff):
                 fr = self.points[i]
                 to = self.points[i+1]
                 if (fr.abs() != 0 and to.abs() != 0):
                     drawLine(fr, to, 'green', 3, fftCanvas)
-        if (self.counter != 0 and self.points[self.len-1].abs() != 0):
-            drawLine(self.points[self.len-1], self.points[0], 'green', 3, fftCanvas)
+        if (self.counter % self.maxlen != 0 and self.counter > self.maxlen):
+            fr = self.points[len(self.points)-1]
+            to = self.points[0]
+            drawLine(fr, to, 'green', 3, fftCanvas)
+
+class Timer:
+    def __init__(self, len):
+        self.len = len
+        self.counter = 0
+    
+    def incr(self):
+        self.counter = self.counter + 0.01 * self.len * np.pi
+
+    def time(self):
+        return self.counter
 
 
 def drawLine(p1, p2, color, width, canvas):
     canvas.create_line((p1.x, p1.y), (p2.x, p2.y), fill=color, width=width)
-
-def addPoints(p1, p2):
-    return Point(p1.x + p2.x, p1.y + p2.y)
 
 def quitCallback():
     global appActive
@@ -97,11 +120,9 @@ def mouseRelease(event):
     global dragActive
     global tx, ty
     global fftPath
+    global timer
 
-    pathLen = len(userPath.points)
-    if (pathLen % 2 == 0):
-        userPath.points.append(userPath.points[pathLen-1])
-
+    timer = Timer(len(userPath.points))
     fftPath = FFTPath(len(userPath.points))
     dragActive = False
     fftCanvas.delete("all")
@@ -119,28 +140,20 @@ def getTransforms(path):
     return (Transform(fx, len(fx), 0), Transform(fy, len(fy), np.pi/2))
 
 def drawArms():
-    tx.update()
-    ty.update()
-    fr = addPoints(tx.points[0], ty.points[0]) # start from center of drawing
+    tx.update(timer)
+    ty.update(timer)
+    fr = tx.points[0].add(ty.points[0])
 
     pos = 1
     neg = tx.len-1
 
-    while (neg >= pos):
-        to = addPoints(fr, tx.points[pos])
-        drawLine(fr, to, 'white', 1, fftCanvas)
-        fr = to
-
-        to = addPoints(fr, ty.points[pos])
+    while (neg >= pos and pos < 50):
+        to = fr.add(tx.points[pos]).add(ty.points[pos])
         drawLine(fr, to, 'white', 1, fftCanvas)
         fr = to
 
         if (pos != neg):
-            to = addPoints(fr, tx.points[neg])
-            drawLine(fr, to, 'white', 1, fftCanvas)
-            fr = to
-
-            to = addPoints(fr, ty.points[neg])
+            to = fr.add(tx.points[neg]).add(ty.points[neg])
             drawLine(fr, to, 'white', 1, fftCanvas)
             fr = to
 
@@ -154,6 +167,7 @@ def main():
     global appActive, dragActive
     global userPath, fftPath
     global tx, ty
+    global timer
 
     appActive = True
     dragActive = False
@@ -180,13 +194,19 @@ def main():
     tx = Transform([0], 1, 0)
     ty = Transform([0], 1, 0)
     
+    timer = Timer(1)
+
     while(True and appActive):
-        if (tx.len > 1):
+        if (tx.len > 1 and not dragActive):
+            timer.incr()
             total = drawArms()
             fftPath.append(total)
             fftPath.draw()
-        
-        time.sleep(0.01)
+            time.sleep(0.01)
+
+        else:
+            time.sleep(0.001)
+
         try:
             root.update()
             fftCanvas.delete("all")
