@@ -99,6 +99,9 @@ class Timer:
 def drawLine(p1, p2, color, width, canvas):
     canvas.create_line((p1.x, p1.y), (p2.x, p2.y), fill=color, width=width)
 
+def drawCircle(center, radius, color, canvas):
+    canvas.create_oval(center.x-radius, center.y-radius, center.x+radius, center.y+radius, outline=color, width=1)
+
 def quitCallback():
     global appActive
     appActive = False
@@ -151,6 +154,8 @@ def drawArms():
     # should be adequate for most drawings
     while (neg >= pos and pos < 50):
         to = fr.add(tx.points[pos]).add(ty.points[pos])
+        radius = fr.dist(to)
+        drawCircle(fr, radius, 'gray', fftCanvas)
         drawLine(fr, to, 'white', 1, fftCanvas)
         fr = to
 
