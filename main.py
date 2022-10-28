@@ -59,7 +59,7 @@ class UserPath:
 
 class FFTPath:
     def __init__(self):
-        self.maxlen = 190
+        self.maxlen = 390   # out of 400, leaves a small gap when retracing
         self.counter = 0
         self.points = []
 
@@ -72,17 +72,16 @@ class FFTPath:
         self.counter += 1
     
     def draw(self):
-        for i in range(0, len(self.points)-1):
-            cutoff = self.counter % self.maxlen
-            if (i+1 != cutoff):
-                fr = self.points[i]
-                to = self.points[i+1]
-                if (fr.abs() != 0 and to.abs() != 0):
-                    drawLine(fr, to, 'green', 3, fftCanvas)
-        if (self.counter % self.maxlen != 0 and self.counter > self.maxlen):
-            fr = self.points[len(self.points)-1]
-            to = self.points[0]
-            drawLine(fr, to, 'green', 3, fftCanvas)
+        if (self.counter >= 4):
+            if (self.counter > self.maxlen):
+                cutoff = self.counter % self.maxlen
+                rotated = self.points[cutoff:] + self.points[:cutoff]
+                fftCanvas.create_line(rotated, fill='green', width=3)
+            else:
+                if (self.counter % 2 == 0):
+                    fftCanvas.create_line(self.points, fill='green', width=3)
+                else:
+                    fftCanvas.create_line(self.points[:self.counter-1], fill='green', width=3)
 
 class Timer:
     def __init__(self, len):
@@ -90,7 +89,7 @@ class Timer:
         self.counter = 0
     
     def incr(self):
-        self.counter = self.counter + 0.01 * self.len * pi
+        self.counter = self.counter + 0.005 * self.len * pi
 
     def time(self):
         return self.counter
@@ -145,29 +144,38 @@ def getTransforms(path):
 def drawArms():
     tx.update(timer)
     ty.update(timer)
-    fr = tx.points[0].add(ty.points[0])
 
+    center = tx.points[0].add(ty.points[0])
+
+    arms = [(center.x, center.y)]
     pos = 1
     neg = tx.len-1
 
-    # only use the first 50 frequencies,
-    # should be adequate for most drawings
-    while (neg >= pos and pos < 50):
-        to = fr.add(tx.points[pos]).add(ty.points[pos])
-        radius = fr.dist(to)
-        drawCircle(fr, radius, 'gray', fftCanvas)
-        drawLine(fr, to, 'white', 1, fftCanvas)
-        fr = to
+    stop = center
+    while (neg >= pos):
+        start = stop.add(tx.points[pos]).add(ty.points[pos])
+        arms.append((start.x, start.y))
+
+        radius = stop.dist(start)
+        if (radius > 8):
+            drawCircle(stop, radius, 'gray', fftCanvas)
 
         if (pos != neg):
-            to = fr.add(tx.points[neg]).add(ty.points[neg])
-            drawLine(fr, to, 'white', 1, fftCanvas)
-            fr = to
-
+            stop = start.add(tx.points[neg]).add(ty.points[neg]) 
+            arms.append((stop.x, stop.y))
+            
+            radius = start.dist(stop)
+            if (radius > 8):
+                drawCircle(start, radius, 'gray', fftCanvas)
+            
         pos += 1
         neg -= 1
 
-    return fr
+    if (len(arms) % 2 == 0):
+        arms.pop()
+    
+    fftCanvas.create_line(arms, fill='white', width=1)
+    return stop
 
 def main():
     global root, userCanvas, fftCanvas
@@ -207,9 +215,9 @@ def main():
         if (tx.len > 1 and not dragActive):
             timer.incr()
             total = drawArms()
-            fftPath.append(total)
+            fftPath.append((total.x, total.y))
             fftPath.draw()
-            sleep(0.02)
+            sleep(0.01)
         else:
             sleep(0.001)
 
