@@ -60,7 +60,7 @@ class LeftCanvas:
         if (self.dragActive):
             self.path.append((event.x, event.y))
             if (len(self.path) > 1):
-                self.canvas.create_line(self.path[-2], self.path[-1], fill='#5F8FAF', width=2)
+                self.canvas.create_line(self.path[-2], self.path[-1], fill='#5F9FBF', width=3)
 
     def onMouseRelease(self, event):
         self.newPath = True
@@ -85,20 +85,22 @@ class RightCanvas:
                 leftCanvas.newPath = False
                 self.transform = Transform(leftCanvas.path)
                 self.path = []
-                self.pathLength = int(2 * self.transform.length / angularVelocity) - 10
+                self.pathLength = int(2 * self.transform.length / angularVelocity) - 20
                 self.cutoff = 0
 
             elif (self.transform.length > 1):
                 self.canvas.delete("all")
                 self.transform.update()
-                self.canvas.create_line(self.transform.points, fill='white', width=1)
                 self.drawEpicycles()
 
                 self.appendPath(self.transform.points[-1])
                 rotatedPath = self.path[self.cutoff:] + self.path[:self.cutoff]
                 if (len(self.path) > 1):
-                    self.canvas.create_line(rotatedPath, fill='#5F8FAF', width=2)
+                    self.canvas.create_line(rotatedPath, fill='#5F9FBF', width=3)
 
+                self.canvas.create_line(self.transform.points, fill='white', width=1)
+
+                
 
     def appendPath(self, point):
         if (len(self.path) < self.pathLength):
@@ -117,7 +119,6 @@ class RightCanvas:
             if (radius > 5):
                 self.canvas.create_oval(p1[0]-radius, p1[1]-radius, p1[0]+radius, p1[1]+radius, outline='#202020', width=1)
     
-
 def onWindowClose():
     global appActive
     appActive = False
@@ -128,7 +129,7 @@ def main():
     appActive = True
 
     global angularVelocity, maxComponents
-    angularVelocity = 0.5
+    angularVelocity = 1.3
     maxComponents = 50
 
     global root
@@ -141,7 +142,6 @@ def main():
     root.update()
 
     w,h = root.winfo_width(), root.winfo_height()
-
     leftCanvas = LeftCanvas(root, w, h)
     rightCanvas = RightCanvas(root, w, h)
 
